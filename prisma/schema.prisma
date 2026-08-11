@@ -1,13 +1,126 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum Role {
+  admin
+  user
+  premium_user
+}
+
+model User {
+  id            String    @id @default(uuid())
+  firstname     String
+  lastname      String
+  email         String    @unique
+  phone         String
+  passwordHash  String    @map("password_hash")
+  role          Role
+  imageUrl      String?   @map("image_url")
+  imagePublicId String?   @map("image_public_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  lastLogin     DateTime  @map("last_login")
+
+  playlists     Playlist[]
+  albums        Album[]
+  songs         Song[]
+
+  @@map("users")
+}
+
+model Album {
+  id            String   @id @default(uuid())
+  title         String
+  artist        String
+  description   String
+  bgColor       String
+  isPublic      Boolean
+
+  // Cloudinary-hosted cover image
+  imageUrl      String?  @map("image_url")
+  imagePublicId String?  @map("image_public_id")
+
+  // Relation to uploading User
+  uploaderId    String   @map("uploader_id")
+  uploader      User     @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  songs         Song[]
+
+  @@map("albums")
+}
+
+model Song {
+  id            String   @id @default(uuid())
+  title         String
+  artist        String
+  durationSec   Int?     @map("duration_sec")
+  description   String
+  isPublic      Boolean
+
+  // Cloudinary-hosted audio file (required)
+  audioUrl      String   @map("audio_url")
+  audioPublicId String   @map("audio_public_id")
+
+  // Cloudinary-hosted cover/artwork image (optional)
+  imageUrl      String?  @map("image_url")
+  imagePublicId String?  @map("image_public_id")
+
+  // Relation to Album (optional)
+  albumId       String?  @map("album_id")
+  album         Album?   @relation(fields: [albumId], references: [id], onDelete: SetNull)
+
+  // Relation to uploading User
+  uploaderId    String   @map("uploader_id")
+  uploader      User     @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  playlistEntries PlaylistSong[]
+
+  @@map("songs")
+}
+
+model Playlist {
+  id            String   @id @default(uuid())
+  name          String
+  description   String
+  isPublic      Boolean
+
+  // Cloudinary-hosted cover image
+  imageUrl      String?  @map("image_url")
+  imagePublicId String?  @map("image_public_id")
+
+  ownerId       String   @map("owner_id")
+  owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  songEntries   PlaylistSong[]
+
+  @@map("playlists")
+}
+
+// Explicit join table for the Playlist <-> Song many-to-many relationship.
+model PlaylistSong {
+  playlistId String   @map("playlist_id")
+  songId     String   @map("song_id")
+  addedAt    DateTime @default(now()) @map("added_at")
+
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  song       Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@id([playlistId, songId])
+  @@map("playlist_songs")
 }

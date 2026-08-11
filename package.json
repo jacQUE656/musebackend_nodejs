@@ -1,10 +1,20 @@
 {
   "name": "musebackendwithnodejs",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Song/Album/Playlist API with role-based authorization and Cloudinary-hosted media",
+  "main": "src/server.js",
+  "prisma": {
+    "seed": "node db/seed.js"
+  },
+
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "postinstall": "prisma generate",
+    "migrate": "prisma migrate dev",
+    "seed": "node db/seed.js",
+    "studio": "prisma studio"
   },
   "keywords": [],
   "author": "",
