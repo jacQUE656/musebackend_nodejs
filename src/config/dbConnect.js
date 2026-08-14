@@ -1,8 +1,13 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import pg from "pg";
 
-const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === "development" ? ["query", "warn", "error"] : ["warn", "error"],
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
 });
+
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 const connectDB = async () => {
   try {
@@ -17,16 +22,6 @@ const connectDB = async () => {
 const disconnectDB = async () => {
   await prisma.$disconnect();
 };
-
-process.on("SIGINT", async () => {
-  await disconnectDB();
-  process.exit(0);
-});
-
-process.on("SIGTERM", async () => {
-  await disconnectDB();
-  process.exit(0);
-});
 
 export { prisma, connectDB, disconnectDB };
 export default prisma;

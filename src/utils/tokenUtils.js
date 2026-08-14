@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { getUserById } from "../db_services/userService.js"; // Match exact export name from userService
 
 // Short-lived access token — sent in response body or a short-lived cookie
 export const generateAccessToken = (userId, userEmail, userRole) => {
@@ -16,20 +17,31 @@ export const generateRefreshToken = (userId) => {
 };
 
 // Issues both tokens and sets them as httpOnly cookies on the response
-export const generateTokens = (userId, userEmail, userRole, res) => {
-  const accessToken = generateAccessToken(userId, userEmail, userRole);
-  const refreshToken = generateRefreshToken(userId);
+export const generateTokens = async (userId, res) => {
+  // FIXED: Added await to resolve the Prisma Promise
+  const user = await getUserById(userId); 
 
+  if (!user) {
+    throw new Error("User not found during token generation");
+  }
+
+  const accessToken = generateAccessToken(user.id, user.email, user.role);
+  const refreshToken = generateRefreshToken(user.id);
+
+  const isProduction = process.env.NODE_ENV === "production";
+
+  // FIXED: maxAge aligned with 15m expiration (15 * 60 * 1000 ms)
   res.cookie("accessToken", accessToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isProduction,
     sameSite: "strict",
-    maxAge: 1000 * 60 * 60 *24 * 7, // 7 days
+    maxAge: 15 * 60 * 1000, // 15 minutes
   });
 
+  // Long-lived refresh cookie
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isProduction,
     sameSite: "strict",
     maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
   });

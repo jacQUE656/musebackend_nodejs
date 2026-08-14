@@ -1,13 +1,68 @@
 import "dotenv/config";
-import express from 'express';
+import express from "express";
+import cookieParser from "cookie-parser";
+import cors from "cors";
 import prisma, { connectDB, disconnectDB } from "./config/dbConnect.js";
-
-await connectDB();
+import authRoutes from "./routers/authRoutes.js";
 
 const app = express();
 
-const PORT = process.env.PORT || 5000;
+// 1. Core Global Middleware
+app.use(cors({
+  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  credentials: true, // Required for httpOnly cookies cross-origin
+}));
+app.use(express.json());
+app.use(cookieParser());
 
-const server = app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// 2. Route Mounting
+app.use("/api/auth", authRoutes);
+
+// Health Check Endpoint
+app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+
+// 3. Global Error Handler (MUST BE MOUNTED AFTER ALL ROUTES)
+app.use((err, req, res, next) => {
+  console.error(err);
+  if (err.name === "MulterError") {
+    return res.status(400).json({ error: `Upload error: ${err.message}` });
+  }
+  return res.status(500).json({ error: "Internal server error" });
 });
+
+// 4. Server Initialization & Graceful Shutdown
+const PORT = process.env.PORT || 5000;
+let server;
+
+const startServer = async () => {
+  try {
+    await connectDB();
+    server = app.listen(PORT, () => {
+      console.log(`RBAC Music API listening on http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error("Failed to start server due to database connection error:", error);
+    process.exit(1);
+  }
+};
+
+startServer();
+
+const shutdown = async (signal) => {
+  console.log(`${signal} received, shutting down gracefully...`);
+  if (server) {
+    server.close(async () => {
+      await disconnectDB();
+      console.log("Database disconnected and server closed successfully.");
+      process.exit(0);
+    });
+  } else {
+    await disconnectDB();
+    process.exit(0);
+  }
+};
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+export default app;

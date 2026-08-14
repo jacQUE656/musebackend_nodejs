@@ -5,7 +5,6 @@ const publicUserSelect = {
 };
 
 async function findUserByEmail(email) {
-  // Note: keep this one WITHOUT the omit — you need passwordHash here to verify login
   return prisma.user.findUnique({ where: { email } });
 }
 
@@ -17,4 +16,19 @@ async function getAllUsers() {
   return prisma.user.findMany({ ...publicUserSelect });
 }
 
-export { findUserByEmail, getUserById, getAllUsers };
+async function createUser(userData) {
+  const { firstname, lastname, email, phone, password } = userData;
+
+  return prisma.user.create({
+    data: {
+      firstname,
+      lastname,
+      email,
+      phone,
+      passwordHash: password,
+    },
+    ...publicUserSelect,
+  });
+}
+
+export { findUserByEmail, getUserById, getAllUsers, createUser };
