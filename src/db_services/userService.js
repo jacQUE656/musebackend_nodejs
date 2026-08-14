@@ -1,7 +1,17 @@
 import prisma from "../config/dbConnect.js";
+import { Role } from "@prisma/client";
 
 const publicUserSelect = {
-  omit: { passwordHash: true },
+  select: {
+    id: true,
+    firstname: true,
+    lastname: true,
+    email: true,
+    phone: true,
+    role: true,
+    lastLogin: true,
+    createdAt: true,
+  },
 };
 
 async function findUserByEmail(email) {
@@ -9,15 +19,20 @@ async function findUserByEmail(email) {
 }
 
 async function getUserById(id) {
-  return prisma.user.findUnique({ where: { id }, ...publicUserSelect });
+  return prisma.user.findUnique({ 
+    where: { id }, 
+    ...publicUserSelect 
+  });
 }
 
 async function getAllUsers() {
-  return prisma.user.findMany({ ...publicUserSelect });
+  return prisma.user.findMany({ 
+    ...publicUserSelect 
+  });
 }
 
 async function createUser(userData) {
-  const { firstname, lastname, email, phone, password } = userData;
+  const { firstname, lastname, email, phone, passwordHash, role } = userData;
 
   return prisma.user.create({
     data: {
@@ -25,10 +40,21 @@ async function createUser(userData) {
       lastname,
       email,
       phone,
-      passwordHash: password,
+      passwordHash,
+      role: role || Role.user,
+      lastLogin: new Date(), // Set on initial registration
     },
     ...publicUserSelect,
   });
 }
 
-export { findUserByEmail, getUserById, getAllUsers, createUser };
+// Helper to update last_login timestamp
+async function updateLastLogin(userId) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { lastLogin: new Date() },
+    ...publicUserSelect,
+  });
+}
+
+export { findUserByEmail, getUserById, getAllUsers, createUser, updateLastLogin };

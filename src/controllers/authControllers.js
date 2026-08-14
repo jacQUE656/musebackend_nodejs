@@ -1,5 +1,11 @@
-import { findUserByEmail, createUser, getUserById } from "../db_services/userService.js";
+import { 
+    findUserByEmail, 
+    createUser, 
+    getUserById, 
+    updateLastLogin 
+} from "../db_services/userService.js";
 import bcrypt from "bcryptjs";
+import { Role } from "@prisma/client";
 import { 
     generateTokens, 
     verifyRefreshToken, 
@@ -35,7 +41,8 @@ export const register = async (req, res) => {
             lastname,
             email,
             phone,
-            password: hashedPassword
+            passwordHash: hashedPassword,
+            role: Role.user
         });
 
         // Await async generateTokens
@@ -51,7 +58,11 @@ export const register = async (req, res) => {
         });
 
     } catch (err) {
-        return res.status(500).json({ message: "Server error, please try again later" });
+        console.error("🔥 Error in register controller:", err);
+        return res.status(500).json({ 
+            message: "Server error, please try again later",
+            ...(process.env.NODE_ENV !== "production" && { error: err.message, stack: err.stack })
+        });
     }
 };
 
@@ -80,6 +91,9 @@ export const login = async (req, res) => {
             return res.status(401).json({ message: "Invalid email or password" });
         }
 
+        // Update lastLogin timestamp in DB
+        const updatedUser = await updateLastLogin(user.id);
+
         // Await async generateTokens
         const { accessToken } = await generateTokens(user.id, res);
 
@@ -87,16 +101,21 @@ export const login = async (req, res) => {
             status: "success",
             data: {
                 user: {
-                    id: user.id,
-                    email: user.email,
-                    role: user.role
+                    id: updatedUser.id,
+                    email: updatedUser.email,
+                    role: updatedUser.role,
+                    lastLogin: updatedUser.lastLogin
                 },
                 accessToken
             }
         });
 
     } catch (err) {
-        return res.status(500).json({ message: "Server error, please try again later" });
+        console.error("🔥 Error in login controller:", err);
+        return res.status(500).json({ 
+            message: "Server error, please try again later",
+            ...(process.env.NODE_ENV !== "production" && { error: err.message, stack: err.stack })
+        });
     }
 };
 
@@ -111,24 +130,20 @@ export const refreshToken = async (req, res) => {
             return res.status(401).json({ message: "Refresh token missing" });
         }
 
-        // 1. Verify token payload
         const decoded = verifyRefreshToken(refreshTokenVal);
 
-        // 2. Query user to ensure payload fresh data (e.g., current role)
         const user = await getUserById(decoded.userId);
         if (!user) {
             return res.status(401).json({ message: "User no longer exists" });
         }
 
-        // 3. Generate new short-lived access token
         const newAccessToken = generateAccessToken(user.id, user.email, user.role);
 
-        // Update cookie
         res.cookie("accessToken", newAccessToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "strict",
-            maxAge: 15 * 60 * 1000 // 15 mins
+            maxAge: 15 * 60 * 1000
         });
 
         return res.status(200).json({
