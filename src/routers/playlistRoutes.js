@@ -1,6 +1,6 @@
 import { Router } from "express";
 import playlistController from "../controllers/playlistController.js";
-import authenticate from "../middleware/authentication.js"
+import authenticate from "../middleware/authentication.js";
 import authorize from "../middleware/authorization.js";
 import optionalAuthenticate from "../middleware/optionalAuthenticate.js";
 import authorizePlaylistAccess from "../middleware/authorizePlaylistAccess.js";
@@ -27,7 +27,7 @@ router.post(
   authorize(PERMISSIONS.PLAYLIST_CREATE),
   uploadCoverImage,
   validateBody(validateCreatePlaylist),
-  playlistController.createPlaylist
+  playlistController.createPlaylist,
 );
 
 router.patch(
@@ -35,7 +35,7 @@ router.patch(
   authenticate,
   authorizePlaylistAccess("update"),
   validateBody(validateUpdatePlaylist),
-  playlistController.updatePlaylist
+  playlistController.updatePlaylist,
 );
 
 router.patch(
@@ -43,7 +43,7 @@ router.patch(
   authenticate,
   authorizePlaylistAccess("publish"),
   validateBody(validateSetPublic),
-  playlistController.setPlaylistPublic
+  playlistController.setPlaylistPublic,
 );
 
 router.post(
@@ -51,16 +51,21 @@ router.post(
   authenticate,
   authorizePlaylistAccess("update"),
   validateBody(validateAddSongToPlaylist),
-  playlistController.addSongToPlaylist
+  playlistController.addSongToPlaylist,
 );
 
 router.delete(
   "/:id/songs/:songId",
   authenticate,
   authorizePlaylistAccess("update"),
-  playlistController.removeSongFromPlaylist
+  playlistController.removeSongFromPlaylist,
 );
 
-router.delete("/:id", authenticate, authorizePlaylistAccess("delete"), playlistController.deletePlaylist);
+router.delete(
+  "/:id",
+  authenticate,
+  authorizePlaylistAccess("delete"),
+  playlistController.deletePlaylist,
+);
 
 export default router;
