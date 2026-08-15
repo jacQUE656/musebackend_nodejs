@@ -6,7 +6,7 @@ import authorizeAlbumAccess from "../middleware/authorizeAlbumAccess.js";
 import optionalAuthenticate from "../middleware/optionalAuthenticate.js";
 import validateBody from "../validators/validateBody.js";
 import { uploadCoverImage } from "../middleware/upload.js";
-import { validateCreateAlbum, validateUpdateAlbum, validateSetPublic } from "../validators/albumValidator.js";
+import { validateCreateAlbum, validateAddSongToAlbum,validateUpdateAlbum, validateSetPublic } from "../validators/albumValidator.js";
 import rbac from "../config/roles.js";
 
 const { PERMISSIONS } = rbac;
@@ -39,6 +39,21 @@ router.patch(
   authorizeAlbumAccess("publish"),
   validateBody(validateSetPublic),
   albumController.setAlbumPublic
+);
+
+router.post(
+  "/:id/songs",
+  authenticate,
+  authorizeAlbumAccess("update"),
+  validateBody(validateAddSongToAlbum),
+  albumController.addSongToAlbum
+);
+
+router.delete(
+  "/:id/songs/:songId",
+  authenticate,
+  authorizeAlbumAccess("update"),
+  albumController.removeSongFromAlbum
 );
 
 router.delete("/:id", authenticate, authorizeAlbumAccess("delete"), albumController.deleteAlbum);

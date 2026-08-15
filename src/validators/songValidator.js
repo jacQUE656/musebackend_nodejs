@@ -20,3 +20,4 @@ export const validateUpdateSong = z.object({
 export const validateSetPublic = z.object({
   isPublic: z.boolean(),
 });
+

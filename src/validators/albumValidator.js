@@ -20,3 +20,7 @@ export const validateUpdateAlbum = z.object({
 export const validateSetPublic = z.object({
   isPublic: z.boolean(),
 });
+
+export const validateAddSongToAlbum = z.object({
+  songId: z.string().uuid("Invalid song id"),
+});

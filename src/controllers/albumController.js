@@ -1,5 +1,9 @@
 import albums from "../db_services/albums.js";
 import cloudinaryStorage from "../utils/cloudinaryStorage.js";
+import songs from "../db_services/songs.js"; 
+import rbac from "../config/roles.js";
+
+const { ROLES } = rbac; 
 
 async function createAlbum(req, res) {
   try {
@@ -105,6 +109,44 @@ async function setAlbumPublic(req, res) {
   }
 }
 
+// req.album is pre-fetched and ownership-checked by authorizeAlbumAccess("update")
+async function addSongToAlbum(req, res) {
+  try {
+    const song = await songs.getById(req.body.songId);
+    if (!song) return res.status(404).json({ error: "Song not found" });
+
+    const isSongOwner = song.uploaderId === req.user.userId;
+    const isAdmin = req.user.userRole === ROLES.ADMIN;
+
+    if (!isSongOwner && !isAdmin) {
+      return res.status(403).json({ error: "You can only add songs you own to this album" });
+    }
+
+    const updated = await songs.update(song.id, { albumId: req.album.id });
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to add song to album" });
+  }
+}
+
+// req.album is pre-fetched and ownership-checked by authorizeAlbumAccess("update")
+async function removeSongFromAlbum(req, res) {
+  try {
+    const song = await songs.getById(req.params.songId);
+
+    if (!song || song.albumId !== req.album.id) {
+      return res.status(404).json({ error: "Song not found in this album" });
+    }
+
+    const updated = await songs.update(song.id, { albumId: null });
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to remove song from album" });
+  }
+}
+
 export default {
   createAlbum,
   getAlbum,
@@ -113,4 +155,6 @@ export default {
   updateAlbum,
   deleteAlbum,
   setAlbumPublic,
+  addSongToAlbum,
+  removeSongFromAlbum,
 };

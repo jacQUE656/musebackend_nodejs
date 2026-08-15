@@ -1,42 +1,47 @@
 import songs from "../db_services/songs.js";
 import cloudinaryStorage from "../utils/cloudinaryStorage.js";
+import rbac from "../config/roles.js";
+
+const { ROLES } = rbac;
 
 async function createSong(req, res) {
-    try{
-        const audioFile = req.file?.audio?.[0];
-        const imageFile = req.file?.image?.[0];
-        
-        if (!audioFile) {
-            return res.status(400).json({ error: "Audio file is required" });
-        }
+  try {
+    const audioFile = req.files?.audio?.[0];
+    const imageFile = req.files?.image?.[0];
 
-        const audioUploadResult = await cloudinaryStorage.uploadBuffer(audioFile.buffer,
-             { folder: "muse/songs/audio", 
-                resourceType: "video" });
+    if (!audioFile) {
+      return res.status(400).json({ error: "Audio file is required" });
+    }
 
+    const audioUploadResult = await cloudinaryStorage.uploadBuffer(audioFile.buffer, {
+      folder: "muse/songs/audio",
+      resourceType: "video",
+    });
 
-        let imageUploadResult = null;
+    let imageUploadResult = null;
 
-        if (imageFile) {
-            imageUploadResult = await cloudinaryStorage.uploadBuffer(imageFile.buffer, 
-                { folder: "muse/songs/images", 
-                    resourceType: "image" });
-        }
-        const song = await songs.create({
+    if (imageFile) {
+      imageUploadResult = await cloudinaryStorage.uploadBuffer(imageFile.buffer, {
+        folder: "muse/songs/images",
+        resourceType: "image",
+      });
+    }
+
+    const song = await songs.create({
       title: req.body.title,
       artist: req.body.artist,
       description: req.body.description,
       durationSec: req.body.durationSec,
-      isPublic: req.body.isPublic,
+      isPublic: req.user.userRole === ROLES.ADMIN, // admins publish immediately; everyone else starts private
       albumId: req.body.albumId,
       audioUrl: audioUploadResult.secure_url,
       audioPublicId: audioUploadResult.public_id,
       imageUrl: imageUploadResult?.secure_url,
       imagePublicId: imageUploadResult?.public_id,
       uploaderId: req.user.userId,
-        });
-        
-       res.status(201).json(song);
+    });
+
+    res.status(201).json(song);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to create song" });
@@ -44,24 +49,21 @@ async function createSong(req, res) {
 }
 
 async function getSong(req, res) {
-    try{
-        const song = await songs.getById(req.params.id);
+  try {
+    const song = await songs.getById(req.params.id);
     if (!song) return res.status(404).json({ error: "Song not found" });
 
-    // Non-owners can only see public songs (admins bypass this via authorizeResourceAccess on write routes,
-    // but read routes are open — enforce visibility here instead)
     const isOwner = song.uploaderId === req.user?.userId;
     if (!song.isPublic && !isOwner) {
       return res.status(404).json({ error: "Song not found" });
     }
 
     res.json(song);
-    }catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Failed to fetch song" });
-    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch song" });
+  }
 }
-
 
 async function listPublicSongs(req, res) {
   try {
@@ -84,6 +86,7 @@ async function listMySongs(req, res) {
     res.status(500).json({ error: "Failed to fetch your songs" });
   }
 }
+
 // req.song is pre-fetched and ownership/permission-checked by authorizeSongAccess("update")
 async function updateSong(req, res) {
   try {
@@ -95,13 +98,12 @@ async function updateSong(req, res) {
   }
 }
 
-
 // req.song is pre-fetched and ownership/permission-checked by authorizeSongAccess("delete")
 async function deleteSong(req, res) {
   try {
-    await cloudinaryService.destroyAudio(req.song.audioPublicId);
+    await cloudinaryStorage.destroyAudio(req.song.audioPublicId);
     if (req.song.imagePublicId) {
-      await cloudinaryService.destroyImage(req.song.imagePublicId);
+      await cloudinaryStorage.destroyImage(req.song.imagePublicId);
     }
     await songs.remove(req.song.id);
     res.status(204).send();
@@ -121,8 +123,6 @@ async function setSongPublic(req, res) {
     res.status(500).json({ error: "Failed to update song visibility" });
   }
 }
-
-
 
 export default {
   createSong,
