@@ -1,4 +1,6 @@
-import {roleHasPermission} from "../config/roles.js";
+import rbac from "../config/roles.js";
+
+const {roleHasPermission} = rbac;
 
 function authorize(permission) {
   return (req, res, next) => {

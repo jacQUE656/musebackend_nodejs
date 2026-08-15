@@ -4,6 +4,11 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import prisma, { connectDB, disconnectDB } from "./config/dbConnect.js";
 import authRoutes from "./routers/authRoutes.js";
+import songRoutes from "./routers/songRoutes.js";
+import albumRoutes from "./routers/albumRoutes.js";
+import playlistRoutes from "./routers/playlistRoutes.js";
+import notFound from "./middleware/notFound.js";
+import errorHandler from "./middleware/errorHandler.js";
 
 const app = express();
 
@@ -17,18 +22,16 @@ app.use(cookieParser());
 
 // 2. Route Mounting
 app.use("/api/auth", authRoutes);
+app.use("/api/songs", songRoutes);
+app.use("/api/albums", albumRoutes);
+app.use("/api/playlists", playlistRoutes);
 
 // Health Check Endpoint
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
-// 3. Global Error Handler (MUST BE MOUNTED AFTER ALL ROUTES)
-app.use((err, req, res, next) => {
-  console.error(err);
-  if (err.name === "MulterError") {
-    return res.status(400).json({ error: `Upload error: ${err.message}` });
-  }
-  return res.status(500).json({ error: "Internal server error" });
-});
+// 3. 404 + Global Error Handler (MUST BE MOUNTED AFTER ALL ROUTES)
+app.use(notFound);
+app.use(errorHandler);
 
 // 4. Server Initialization & Graceful Shutdown
 const PORT = process.env.PORT || 5000;

@@ -1,16 +1,13 @@
+import rbac from "../config/roles.js";
 
-import { roleHasPermission } from "../config/roles.js";
+const { roleHasPermission } = rbac;
 
-/**
- * @param {object} config
- * @param {string} config.resourceName   - key to cache on req (e.g. "song", "album", "playlist")
- * @param {(id: string) => Promise<object|null>} config.getById - fetch function
- * @param {string} config.ownerField     - field on the resource holding the owner's user id
- * @param {object} config.permissions    - { manageAny, updateOwn, deleteOwn }
- */
 function createAuthorizeResourceAccess({ resourceName, getById, ownerField, permissions }) {
   return function authorizeResourceAccess(action) {
-    const ownPermission = action === "update" ? permissions.updateOwn : permissions.deleteOwn;
+    const ownPermission =
+      action === "update" ? permissions.updateOwn
+      : action === "delete" ? permissions.deleteOwn
+      : permissions.publicOwn; // action === "publish"
 
     return async function (req, res, next) {
       try {
@@ -23,7 +20,7 @@ function createAuthorizeResourceAccess({ resourceName, getById, ownerField, perm
 
         const isAdminOverride = roleHasPermission(user.userRole, permissions.manageAny);
         const isOwner = resource[ownerField] === user.userId;
-        const hasOwnPermission = roleHasPermission(user.userRole, ownPermission);
+        const hasOwnPermission = ownPermission && roleHasPermission(user.userRole, ownPermission);
 
         if (isAdminOverride || (hasOwnPermission && isOwner)) {
           req[resourceName] = resource;
