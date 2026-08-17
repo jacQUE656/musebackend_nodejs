@@ -12,7 +12,7 @@ import {
     generateAccessToken 
 } from "../utils/tokenUtils.js";
 import { validateLogin, validateRegister } from "../validators/authValidator.js";
-
+import emailService from "../mailing/emailService.js";
 // ==========================================
 // REGISTER USER
 // ==========================================
@@ -47,6 +47,13 @@ export const register = async (req, res) => {
 
         // Await async generateTokens
         const { accessToken } = await generateTokens(newUser.id, res);
+
+        // Fire-and-forget — must run before the response is sent, since code
+        // after a `return` never executes. Not awaited so a slow/failed email
+        // doesn't delay or break registration.
+        emailService.sendWelcomeEmail(newUser.email, newUser.firstname, newUser.lastname).catch((err) => {
+            console.error("Failed to send welcome email:", err);
+        });
 
         return res.status(201).json({
             status: "success",
