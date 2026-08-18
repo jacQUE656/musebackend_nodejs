@@ -1,6 +1,12 @@
 import songs from "../db_services/songs.js";
 import cloudinaryStorage from "../utils/cloudinaryStorage.js";
 import playlists from "../db_services/playlists.js";
+import rbac from "../config/roles.js";
+import emailService from "../mailing/emailService.js";
+import notificationService from "../db_services/notificationService.js";
+import users from "../db_services/userService.js";
+
+const { ROLES } = rbac;
 
 async function createPlaylist(req, res) {
   try {
@@ -14,18 +20,53 @@ async function createPlaylist(req, res) {
       });
     }
 
+    const isPublic = req.body.isPublic === "true" || req.body.isPublic === true;
+
     const playlist = await playlists.create({
       name: req.body.name,
       description: req.body.description,
-      isPublic: req.body.isPublic,
+      isPublic,
       imageUrl: imageUpload?.secure_url,
       imagePublicId: imageUpload?.public_id,
       ownerId: req.user.userId,
     });
 
     res.status(201).json(playlist);
+
+    // Run background notifications safely
+    queueMicrotask(async () => {
+      try {
+        if (req.user.userRole === ROLES.ADMIN) {
+          const allUsers = await users.getAllUsers();
+          const userIds = allUsers.map((u) => u.id);
+          const recipientEmails = allUsers.map((u) => u.email).filter(Boolean);
+
+          await Promise.allSettled([
+            notificationService.createNotificationForMany(userIds, {
+              type: "new_playlist",
+              title: "New Playlist",
+              message: `Muse just released the latest playlist "${playlist.name}"`,
+              playlistId: playlist.id,
+            }),
+            recipientEmails.length > 0
+              ? emailService.sendNewPlaylistNotification(recipientEmails, playlist)
+              : Promise.resolve(),
+          ]);
+        } else if (req.user.userRole === ROLES.USER) {
+          await notificationService.createNotification({
+            userId: playlist.ownerId, // Fixed uploaderId -> ownerId
+            type: "new_playlist",
+            title: "New Playlist",
+            message: `You just created the playlist "${playlist.name}"`,
+            playlistId: playlist.id,
+          });
+        }
+      } catch (err) {
+        console.error("Failed executing post-creation background tasks:", err);
+      }
+    });
   } catch (err) {
-    console.error(err);
+    console.error("Create playlist error:", err);
     res.status(500).json({ error: "Failed to create playlist" });
   }
 }
@@ -42,19 +83,20 @@ async function getPlaylist(req, res) {
 
     res.json(playlist);
   } catch (err) {
-    console.error(err);
+    console.error("Get playlist error:", err);
     res.status(500).json({ error: "Failed to fetch playlist" });
   }
 }
 
 async function listPublicPlaylists(req, res) {
   try {
-    const skip = Number(req.query.skip) || 0;
-    const take = Number(req.query.take) || 50;
+    const skip = Math.max(0, Number(req.query.skip) || 0);
+    const take = Math.min(100, Math.max(1, Number(req.query.take) || 50));
+
     const result = await playlists.getPublic({ skip, take });
     res.json(result);
   } catch (err) {
-    console.error(err);
+    console.error("List public playlists error:", err);
     res.status(500).json({ error: "Failed to fetch playlists" });
   }
 }
@@ -64,17 +106,18 @@ async function listMyPlaylists(req, res) {
     const result = await playlists.getByOwner(req.user.userId);
     res.json(result);
   } catch (err) {
-    console.error(err);
+    console.error("List my playlists error:", err);
     res.status(500).json({ error: "Failed to fetch your playlists" });
   }
 }
 
 async function updatePlaylist(req, res) {
   try {
-    const updated = await playlists.update(req.playlist.id, req.body);
+    const { name, description } = req.body;
+    const updated = await playlists.update(req.playlist.id, { name, description });
     res.json(updated);
   } catch (err) {
-    console.error(err);
+    console.error("Update playlist error:", err);
     res.status(500).json({ error: "Failed to update playlist" });
   }
 }
@@ -84,32 +127,30 @@ async function deletePlaylist(req, res) {
     if (req.playlist.imagePublicId) {
       await cloudinaryStorage.destroyImage(req.playlist.imagePublicId);
     }
-    // playlist_songs rows cascade-delete automatically per schema
     await playlists.remove(req.playlist.id);
     res.status(204).send();
   } catch (err) {
-    console.error(err);
+    console.error("Delete playlist error:", err);
     res.status(500).json({ error: "Failed to delete playlist" });
   }
 }
 
 async function setPlaylistPublic(req, res) {
   try {
-    const updated = await playlists.setPublic(req.playlist.id, req.body.isPublic);
+    const isPublic = req.body.isPublic === true || req.body.isPublic === "true";
+    const updated = await playlists.setPublic(req.playlist.id, isPublic);
     res.json(updated);
   } catch (err) {
-    console.error(err);
+    console.error("Set playlist public error:", err);
     res.status(500).json({ error: "Failed to update playlist visibility" });
   }
 }
 
-// req.playlist is pre-fetched by authorizePlaylistAccess("update")
 async function addSongToPlaylist(req, res) {
   try {
     const song = await songs.getById(req.body.songId);
     if (!song) return res.status(404).json({ error: "Song not found" });
 
-    // Can't add a private song you don't own to a playlist
     const isSongOwner = song.uploaderId === req.user.userId;
     if (!song.isPublic && !isSongOwner) {
       return res.status(403).json({ error: "Cannot add a private song you don't own" });
@@ -121,7 +162,7 @@ async function addSongToPlaylist(req, res) {
     if (err.code === "P2002") {
       return res.status(409).json({ error: "Song is already in this playlist" });
     }
-    console.error(err);
+    console.error("Add song to playlist error:", err);
     res.status(500).json({ error: "Failed to add song to playlist" });
   }
 }
@@ -134,7 +175,7 @@ async function removeSongFromPlaylist(req, res) {
     if (err.code === "P2025") {
       return res.status(404).json({ error: "Song not found in this playlist" });
     }
-    console.error(err);
+    console.error("Remove song from playlist error:", err);
     res.status(500).json({ error: "Failed to remove song from playlist" });
   }
 }

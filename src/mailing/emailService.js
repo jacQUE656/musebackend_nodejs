@@ -125,4 +125,66 @@ async function sendNewSongNotification(recipients, song) {
   });
 }
 
-export default { sendWelcomeEmail, sendNewSongNotification };
+async function sendAlbumNotification(recipients, album) {
+  const coverImage = album.imageUrl
+    ? `<img src="${album.imageUrl}" alt="${album.title}" width="160" height="160" style="border-radius: 12px; display:block; margin: 0 auto; object-fit: cover;" />`
+    : `<div style="width:160px; height:160px; border-radius:12px; background-color:#2a2a2d; margin: 0 auto; display:flex; align-items:center; justify-content:center; font-size: 40px;">🎵</div>`;
+
+  const bodyHtml = `
+    <tr>
+      <td style="padding: 24px 32px 8px 32px; text-align:center;">
+        <p style="margin: 0 0 16px 0; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color:${BRAND_COLOR};">
+          New Release
+        </p>
+        ${coverImage}
+        <h1 style="margin: 20px 0 4px 0; font-size: 20px; color:${TEXT_COLOR};">
+          ${song.title}
+        </h1>
+        <p style="margin: 0; font-size: 14px; color:${MUTED_COLOR};">
+          ${song.artist}
+        </p>
+        ${album.description ? `<p style="margin: 16px 0 0 0; font-size: 14px; line-height:1.6; color:${MUTED_COLOR};">${album.description}</p>` : ""}
+        ${button("Listen Now", `${process.env.CLIENT_URL}/albums/${album.id}`)}
+      </td>
+    </tr>
+  `;
+
+  await transporter.sendMail({
+    from: `"Muse" <${process.env.GMAIL_USER}>`,
+    bcc: recipients,
+    subject: `New release: ${album.title} by ${album.artist}`,
+    html: baseLayout({ preheader: `${album.artist} just dropped a new track on Muse`, bodyHtml }),
+  });
+}
+
+async function sendNewPlaylistNotification(recipients, playlist) {
+  const coverImage = playlist.imageUrl
+    ? `<img src="${playlist.imageUrl}" alt="${playlist.name}" width="160" height="160" style="border-radius: 12px; display:block; margin: 0 auto; object-fit: cover;" />`
+    : `<div style="width:160px; height:160px; border-radius:12px; background-color:#2a2a2d; margin: 0 auto; display:flex; align-items:center; justify-content:center; font-size: 40px;">🎵</div>`;
+
+  const bodyHtml = `
+    <tr>
+      <td style="padding: 24px 32px 8px 32px; text-align:center;">
+        <p style="margin: 0 0 16px 0; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color:${BRAND_COLOR};">
+          New Release
+        </p>
+        ${coverImage}
+        <h1 style="margin: 20px 0 4px 0; font-size: 20px; color:${TEXT_COLOR};">
+          ${playlist.name}
+        </h1>
+        ${playlist.description ? `<p style="margin: 16px 0 0 0; font-size: 14px; line-height:1.6; color:${MUTED_COLOR};">${playlist.description}</p>` : ""}
+        ${button("Listen Now", `${process.env.CLIENT_URL}/songs/${playlist.id}`)}
+      </td>
+    </tr>
+  `;
+
+  await transporter.sendMail({
+    from: `"Muse" <${process.env.GMAIL_USER}>`,
+    bcc: recipients,
+    subject: `New release: ${playlist.name}`,
+    html: baseLayout({ preheader: `${playlist.name} just dropped a new track on Muse`, bodyHtml }),
+  });
+}
+
+
+export default { sendWelcomeEmail, sendNewSongNotification , sendAlbumNotification, sendNewPlaylistNotification};

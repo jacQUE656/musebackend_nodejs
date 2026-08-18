@@ -1,15 +1,18 @@
 import albums from "../db_services/albums.js";
 import cloudinaryStorage from "../utils/cloudinaryStorage.js";
-import songs from "../db_services/songs.js"; 
+import songs from "../db_services/songs.js";
 import rbac from "../config/roles.js";
+import emailService from "../mailing/emailService.js";
+import notificationService from "../db_services/notificationService.js";
+import users from "../db_services/userService.js";
 
-const { ROLES } = rbac; 
+const { ROLES } = rbac;
 
 async function createAlbum(req, res) {
   try {
-    const imageFile = req.file; // single cover image upload
-
+    const imageFile = req.file;
     let imageUpload = null;
+
     if (imageFile) {
       imageUpload = await cloudinaryStorage.uploadBuffer(imageFile.buffer, {
         folder: "muse/albums/covers",
@@ -17,20 +20,56 @@ async function createAlbum(req, res) {
       });
     }
 
+    const isPublic = req.body.isPublic === "true" || req.body.isPublic === true;
+
     const album = await albums.create({
       title: req.body.title,
       artist: req.body.artist,
       description: req.body.description,
       bgColor: req.body.bgColor,
-      isPublic: req.body.isPublic,
+      isPublic,
       imageUrl: imageUpload?.secure_url,
       imagePublicId: imageUpload?.public_id,
       uploaderId: req.user.userId,
     });
 
+    // Respond immediately
     res.status(201).json(album);
+
+    // Run background notifications safely
+    queueMicrotask(async () => {
+      try {
+        if (req.user.userRole === ROLES.ADMIN) {
+          const allUsers = await users.getAllUsers();
+          const userIds = allUsers.map((u) => u.id);
+          const recipientEmails = allUsers.map((u) => u.email).filter(Boolean);
+
+          await Promise.allSettled([
+            notificationService.createNotificationForMany(userIds, {
+              type: "new_album",
+              title: "New Album",
+              message: `${album.artist} just released the album "${album.title}"`,
+              albumId: album.id,
+            }),
+            recipientEmails.length > 0
+              ? emailService.sendAlbumNotification(recipientEmails, album)
+              : Promise.resolve(),
+          ]);
+        } else if (req.user.userRole === ROLES.USER) {
+          await notificationService.createNotification({
+            userId: album.uploaderId,
+            type: "new_album",
+            title: "New Album",
+            message: `You just uploaded the album "${album.title}"`,
+            albumId: album.id,
+          });
+        }
+      } catch (err) {
+        console.error("Failed executing post-creation background tasks:", err);
+      }
+    });
   } catch (err) {
-    console.error(err);
+    console.error("Create album error:", err);
     res.status(500).json({ error: "Failed to create album" });
   }
 }
@@ -47,19 +86,20 @@ async function getAlbum(req, res) {
 
     res.json(album);
   } catch (err) {
-    console.error(err);
+    console.error("Get album error:", err);
     res.status(500).json({ error: "Failed to fetch album" });
   }
 }
 
 async function listPublicAlbums(req, res) {
   try {
-    const skip = Number(req.query.skip) || 0;
-    const take = Number(req.query.take) || 50;
+    const skip = Math.max(0, Number(req.query.skip) || 0);
+    const take = Math.min(100, Math.max(1, Number(req.query.take) || 50));
+
     const result = await albums.getPublic({ skip, take });
     res.json(result);
   } catch (err) {
-    console.error(err);
+    console.error("List public albums error:", err);
     res.status(500).json({ error: "Failed to fetch albums" });
   }
 }
@@ -69,17 +109,24 @@ async function listMyAlbums(req, res) {
     const result = await albums.getByUploader(req.user.userId);
     res.json(result);
   } catch (err) {
-    console.error(err);
+    console.error("List user albums error:", err);
     res.status(500).json({ error: "Failed to fetch your albums" });
   }
 }
 
 async function updateAlbum(req, res) {
   try {
-    const updated = await albums.update(req.album.id, req.body);
+    const { title, artist, description, bgColor } = req.body;
+    const updated = await albums.update(req.album.id, {
+      title,
+      artist,
+      description,
+      bgColor,
+    });
+
     res.json(updated);
   } catch (err) {
-    console.error(err);
+    console.error("Update album error:", err);
     res.status(500).json({ error: "Failed to update album" });
   }
 }
@@ -89,27 +136,25 @@ async function deleteAlbum(req, res) {
     if (req.album.imagePublicId) {
       await cloudinaryStorage.destroyImage(req.album.imagePublicId);
     }
-    // Songs in this album have albumId set to null automatically via
-    // the schema's onDelete: SetNull — they are not deleted.
     await albums.remove(req.album.id);
     res.status(204).send();
   } catch (err) {
-    console.error(err);
+    console.error("Delete album error:", err);
     res.status(500).json({ error: "Failed to delete album" });
   }
 }
 
 async function setAlbumPublic(req, res) {
   try {
-    const updated = await albums.setPublic(req.album.id, req.body.isPublic);
+    const isPublic = req.body.isPublic === true || req.body.isPublic === "true";
+    const updated = await albums.setPublic(req.album.id, isPublic);
     res.json(updated);
   } catch (err) {
-    console.error(err);
+    console.error("Set public error:", err);
     res.status(500).json({ error: "Failed to update album visibility" });
   }
 }
 
-// req.album is pre-fetched and ownership-checked by authorizeAlbumAccess("update")
 async function addSongToAlbum(req, res) {
   try {
     const song = await songs.getById(req.body.songId);
@@ -125,12 +170,11 @@ async function addSongToAlbum(req, res) {
     const updated = await songs.update(song.id, { albumId: req.album.id });
     res.json(updated);
   } catch (err) {
-    console.error(err);
+    console.error("Add song to album error:", err);
     res.status(500).json({ error: "Failed to add song to album" });
   }
 }
 
-// req.album is pre-fetched and ownership-checked by authorizeAlbumAccess("update")
 async function removeSongFromAlbum(req, res) {
   try {
     const song = await songs.getById(req.params.songId);
@@ -142,7 +186,7 @@ async function removeSongFromAlbum(req, res) {
     const updated = await songs.update(song.id, { albumId: null });
     res.json(updated);
   } catch (err) {
-    console.error(err);
+    console.error("Remove song from album error:", err);
     res.status(500).json({ error: "Failed to remove song from album" });
   }
 }

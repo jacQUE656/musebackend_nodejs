@@ -13,6 +13,7 @@ import {
 } from "../utils/tokenUtils.js";
 import { validateLogin, validateRegister } from "../validators/authValidator.js";
 import emailService from "../mailing/emailService.js";
+import notificatinService from "../db_services/notificatinService.js";
 // ==========================================
 // REGISTER USER
 // ==========================================
@@ -51,6 +52,13 @@ export const register = async (req, res) => {
         // Fire-and-forget — must run before the response is sent, since code
         // after a `return` never executes. Not awaited so a slow/failed email
         // doesn't delay or break registration.
+        notificatinService.createNotification({
+            userId: newUser.id,
+            type: "welcome",
+            title: "Welcome to Muse 🎵",
+            message: "Your account is ready: Start exploring songs, albums and playlists."
+        }).catch((err)=> console.error("Failed to  create welcome notification", err));
+        
         emailService.sendWelcomeEmail(newUser.email, newUser.firstname, newUser.lastname).catch((err) => {
             console.error("Failed to send welcome email:", err);
         });
