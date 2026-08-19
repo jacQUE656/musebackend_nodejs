@@ -8,7 +8,7 @@ async function createNotification({userId, type, title, message , songId = null 
 
 async function createNotificationForMany(userIds, {type, title, message , songId = null , albumId = null, playlistId = null}) {
  return prisma.notification.createMany({
-    data: userIds.map((userId) => ({userId, type, title, message, songId, albumId, playlistId}));
+    data: userIds.map((userId) => ({userId, type, title, message, songId, albumId, playlistId}))
  });   
 }
 

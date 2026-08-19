@@ -4,9 +4,10 @@ import songs from "../db_services/songs.js";
 import rbac from "../config/roles.js";
 import emailService from "../mailing/emailService.js";
 import notificationService from "../db_services/notificationService.js";
-import users from "../db_services/userService.js";
+import {getAllUsers} from "../db_services/userService.js";
 
 const { ROLES } = rbac;
+
 
 async function createAlbum(req, res) {
   try {
@@ -20,7 +21,7 @@ async function createAlbum(req, res) {
       });
     }
 
-    const isPublic = req.body.isPublic === "true" || req.body.isPublic === true;
+    const isPublic = req.user.userRole === ROLES.ADMIN; // admins publish immediately; everyone else starts private
 
     const album = await albums.create({
       title: req.body.title,
@@ -33,14 +34,12 @@ async function createAlbum(req, res) {
       uploaderId: req.user.userId,
     });
 
-    // Respond immediately
     res.status(201).json(album);
 
-    // Run background notifications safely
     queueMicrotask(async () => {
       try {
         if (req.user.userRole === ROLES.ADMIN) {
-          const allUsers = await users.getAllUsers();
+          const allUsers = await getAllUsers();
           const userIds = allUsers.map((u) => u.id);
           const recipientEmails = allUsers.map((u) => u.email).filter(Boolean);
 
@@ -52,7 +51,7 @@ async function createAlbum(req, res) {
               albumId: album.id,
             }),
             recipientEmails.length > 0
-              ? emailService.sendAlbumNotification(recipientEmails, album)
+              ? emailService.sendNewAlbumNotification(recipientEmails, album)
               : Promise.resolve(),
           ]);
         } else if (req.user.userRole === ROLES.USER) {

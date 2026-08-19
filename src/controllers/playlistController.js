@@ -4,7 +4,7 @@ import playlists from "../db_services/playlists.js";
 import rbac from "../config/roles.js";
 import emailService from "../mailing/emailService.js";
 import notificationService from "../db_services/notificationService.js";
-import users from "../db_services/userService.js";
+import {getAllUsers} from "../db_services/userService.js";
 
 const { ROLES } = rbac;
 
@@ -37,7 +37,7 @@ async function createPlaylist(req, res) {
     queueMicrotask(async () => {
       try {
         if (req.user.userRole === ROLES.ADMIN) {
-          const allUsers = await users.getAllUsers();
+          const allUsers = await getAllUsers();
           const userIds = allUsers.map((u) => u.id);
           const recipientEmails = allUsers.map((u) => u.email).filter(Boolean);
 
