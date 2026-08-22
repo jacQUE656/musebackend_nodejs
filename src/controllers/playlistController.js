@@ -2,11 +2,11 @@ import songs from "../db_services/songs.js";
 import cloudinaryStorage from "../utils/cloudinaryStorage.js";
 import playlists from "../db_services/playlists.js";
 import rbac from "../config/roles.js";
-import emailService from "../mailing/emailService.js";
 import notificationService from "../db_services/notificationService.js";
 import {getAllUsers} from "../db_services/userService.js";
 
 const { ROLES } = rbac;
+
 
 async function createPlaylist(req, res) {
   try {
@@ -20,7 +20,7 @@ async function createPlaylist(req, res) {
       });
     }
 
-    const isPublic = req.body.isPublic === "true" || req.body.isPublic === true;
+    const isPublic = req.user.userRole === ROLES.ADMIN; // admins publish immediately; everyone else starts private
 
     const playlist = await playlists.create({
       name: req.body.name,
@@ -39,22 +39,16 @@ async function createPlaylist(req, res) {
         if (req.user.userRole === ROLES.ADMIN) {
           const allUsers = await getAllUsers();
           const userIds = allUsers.map((u) => u.id);
-          const recipientEmails = allUsers.map((u) => u.email).filter(Boolean);
 
-          await Promise.allSettled([
-            notificationService.createNotificationForMany(userIds, {
-              type: "new_playlist",
-              title: "New Playlist",
-              message: `Muse just released the latest playlist "${playlist.name}"`,
-              playlistId: playlist.id,
-            }),
-            recipientEmails.length > 0
-              ? emailService.sendNewPlaylistNotification(recipientEmails, playlist)
-              : Promise.resolve(),
-          ]);
+          await notificationService.createNotificationForMany(userIds, {
+            type: "new_playlist",
+            title: "New Playlist",
+            message: `Muse just released the latest playlist "${playlist.name}"`,
+            playlistId: playlist.id,
+          });
         } else if (req.user.userRole === ROLES.USER) {
           await notificationService.createNotification({
-            userId: playlist.ownerId, // Fixed uploaderId -> ownerId
+            userId: playlist.ownerId,
             type: "new_playlist",
             title: "New Playlist",
             message: `You just created the playlist "${playlist.name}"`,
