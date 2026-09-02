@@ -17,6 +17,7 @@ import {
 } from "../validators/authValidator.js";
 import emailService from "../mailing/emailService.js";
 import notificatinService from "../db_services/notificationService.js";
+import crypto from "node:crypto";
 // ==========================================
 // REGISTER USER
 // ==========================================
@@ -187,6 +188,92 @@ export const refreshToken = async (req, res) => {
     return res
       .status(403)
       .json({ message: "Invalid or expired refresh token" });
+  }
+};
+
+// GOOGLE SIGNIN / SIGN-UP
+
+export const googleAuth = async (req, res) => {
+  const { accessToken: googleAccessToken } = req.body;
+
+  if (!googleAccessToken) {
+    return res.status(400).json({ message: "Google accessToken is required" });
+  }
+
+  try {
+    const googleRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${googleAccessToken}` },
+    });
+
+    if (!googleRes.ok) {
+      return res.status(401).json({ message: "Invalid or expired Google access token" });
+    }
+
+    const profile = await googleRes.json();
+    // profile shape: { sub, email, email_verified, given_name, family_name, picture, ... }
+
+    if (!profile.email_verified) {
+      return res.status(401).json({ message: "Google account email is not verified" });
+    }
+
+    let user = await findUserByEmail(profile.email);
+
+    if (!user) {
+      // No password set by the user — generate a random hash so passwordHash
+      // stays satisfied without the user ever knowing/using this password.
+      // (They can only sign in via Google unless they later set a password
+      // through a "set password" flow, which isn't built yet.)
+      const randomPassword = crypto.randomBytes(32).toString("hex");
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+      user = await createUser({
+        firstname: profile.given_name || "Google",
+        lastname: profile.family_name || "User",
+        email: profile.email,
+        phone: null, // requires `phone` to be optional in schema — see note
+        passwordHash: hashedPassword,
+        role: Role.user,
+      });
+
+      notificatinService
+        .createNotification({
+          userId: user.id,
+          type: "welcome",
+          title: "Welcome to Muse 🎵",
+          message: "Your account is ready: Start exploring songs, albums and playlists.",
+        })
+        .catch((err) => console.error("Failed to create welcome notification", err));
+
+      emailService
+        .sendWelcomeEmail(user.email, user.firstname, user.lastname)
+        .catch((err) => console.error("Failed to send welcome email:", err));
+    } else {
+      user = await updateLastLogin(user.id);
+    }
+
+    const { accessToken } = await generateTokens(user.id, res);
+
+    return res.status(200).json({
+      status: "success",
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          lastLogin: user.lastLogin,
+        },
+        accessToken,
+      },
+    });
+  } catch (err) {
+    console.error("🔥 Error in googleAuth controller:", err);
+    return res.status(500).json({
+      message: "Server error, please try again later",
+      ...(process.env.NODE_ENV !== "production" && {
+        error: err.message,
+        stack: err.stack,
+      }),
+    });
   }
 };
 

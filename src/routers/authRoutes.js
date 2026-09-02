@@ -3,7 +3,8 @@ import {
   register, 
   login, 
   logout, 
-  refreshToken 
+  refreshToken,
+  googleAuth,
 } from "../controllers/authControllers.js";
 
 const router = Router();
@@ -26,6 +27,8 @@ router.post("/login", login);
 // @desc    Mint a new access token using valid httpOnly refresh token
 // @access  Public (Cookie-based)
 router.post("/refresh-token", refreshToken);
+
+router.post("/google", googleAuth);
 
 // @route   POST /api/auth/logout
 // @desc    Logout user & clear cookie sessions

@@ -27,7 +27,7 @@ model User {
   firstname     String
   lastname      String
   email         String    @unique
-  phone         String
+  phone         String?
   passwordHash  String    @map("password_hash")
   role          Role
   imageUrl      String?   @map("image_url")
