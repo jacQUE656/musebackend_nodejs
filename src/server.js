@@ -10,6 +10,7 @@ import playlistRoutes from "./routers/playlistRoutes.js";
 import notFound from "./middleware/notFound.js";
 import errorHandler from "./middleware/errorHandler.js";
 import notificationRouter from "./routers/notificationRouter.js";
+import userRoutes from "./routers/userRoutes.js";
 
 const app = express();
 
@@ -26,7 +27,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/songs", songRoutes);
 app.use("/api/albums", albumRoutes);
 app.use("/api/playlists", playlistRoutes);
-app.use("api/notifications" , notificationRouter);
+app.use("/api/notifications", notificationRouter);
+app.use("/api/users", userRoutes);
 
 // Health Check Endpoint
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));

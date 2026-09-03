@@ -25,6 +25,10 @@ const PERMISSIONS = Object.freeze({
   PLAYLIST_DELETE_OWN: "playlist:delete:own",
   PLAYLIST_MANAGE_ANY: "playlist:manage:any", // admin: update/delete ANY playlist
   PLAYLIST_PUBLIC_OWN: "playlist:public:own",
+
+  // Admin-only user management — listing all accounts / looking up any account by id
+  USER_LIST: "user:list",
+  USER_READ_ANY: "user:read:any",
 });
 
 const ROLE_PERMISSIONS = Object.freeze({
@@ -40,6 +44,8 @@ const ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.PLAYLIST_UPDATE_OWN,
     PERMISSIONS.PLAYLIST_DELETE_OWN,
     PERMISSIONS.PLAYLIST_MANAGE_ANY,
+    PERMISSIONS.USER_LIST,
+    PERMISSIONS.USER_READ_ANY,
   ],
   [ROLES.USER]: [
     PERMISSIONS.SONG_READ,
