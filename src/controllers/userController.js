@@ -4,7 +4,7 @@ import {
   updateUser,
   updateUserAvatar,
   getUserImagePublicId,
-} from "../services/userService.js";
+} from "../db_services/userService.js";
 import cloudinaryService from "../utils/cloudinaryStorage.js";
 
 // GET /users/me
