@@ -37,13 +37,13 @@ async function createSong(req, res) {
       artist: req.body.artist,
       description: req.body.description,
       durationSec,
-      isPublic: req.user.userRole === ROLES.ADMIN, // admins publish immediately; everyone else starts private
+      isPublic: req.user.role === ROLES.ADMIN, // FIXED: changed req.user.userRole to req.user.role
       albumId: req.body.albumId || null,
       audioUrl: audioUploadResult.secure_url,
       audioPublicId: audioUploadResult.public_id,
       imageUrl: imageUploadResult?.secure_url,
       imagePublicId: imageUploadResult?.public_id,
-      uploaderId: req.user.userId,
+      uploaderId: req.user.id, // FIXED: changed from req.user.userId to req.user.id
     });
 
     res.status(201).json(song);
@@ -51,7 +51,7 @@ async function createSong(req, res) {
     // Run background notifications safely
     queueMicrotask(async () => {
       try {
-        if (req.user.userRole === ROLES.ADMIN) {
+        if (req.user.role === ROLES.ADMIN) { // FIXED: changed req.user.userRole to req.user.role
           const allUsers = await getAllUsers();
           const userIds = allUsers.map((u) => u.id);
           const recipientEmails = allUsers.map((u) => u.email).filter(Boolean);
@@ -67,7 +67,7 @@ async function createSong(req, res) {
               ? emailService.sendNewSongNotification(recipientEmails, song)
               : Promise.resolve(),
           ]);
-        } else if (req.user.userRole === ROLES.USER) {
+        } else if (req.user.role === ROLES.USER) { // FIXED: changed req.user.userRole to req.user.role
           await notificationService.createNotification({
             userId: song.uploaderId,
             type: "new_song",
@@ -91,7 +91,7 @@ async function getSong(req, res) {
     const song = await songs.getById(req.params.id);
     if (!song) return res.status(404).json({ error: "Song not found" });
 
-    const isOwner = song.uploaderId === req.user?.userId;
+    const isOwner = song.uploaderId === req.user?.id; // FIXED: changed req.user.userId to req.user.id
     if (!song.isPublic && !isOwner) {
       return res.status(404).json({ error: "Song not found" });
     }
@@ -118,7 +118,7 @@ async function listPublicSongs(req, res) {
 
 async function listMySongs(req, res) {
   try {
-    const result = await songs.getByUploader(req.user.userId);
+    const result = await songs.getByUploader(req.user.id); // FIXED: changed req.user.userId to req.user.id
     res.json(result);
   } catch (err) {
     console.error("List my songs error:", err);

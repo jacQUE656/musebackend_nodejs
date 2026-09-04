@@ -8,7 +8,6 @@ import {getAllUsers} from "../db_services/userService.js";
 
 const { ROLES } = rbac;
 
-
 async function createAlbum(req, res) {
   try {
     const imageFile = req.file;
@@ -21,7 +20,7 @@ async function createAlbum(req, res) {
       });
     }
 
-    const isPublic = req.user.userRole === ROLES.ADMIN; // admins publish immediately; everyone else starts private
+    const isPublic = req.user.role === ROLES.ADMIN; 
 
     const album = await albums.create({
       title: req.body.title,
@@ -31,14 +30,14 @@ async function createAlbum(req, res) {
       isPublic,
       imageUrl: imageUpload?.secure_url,
       imagePublicId: imageUpload?.public_id,
-      uploaderId: req.user.userId,
+      uploaderId: req.user.id,
     });
 
     res.status(201).json(album);
 
     queueMicrotask(async () => {
       try {
-        if (req.user.userRole === ROLES.ADMIN) {
+        if (req.user.role === ROLES.ADMIN) {
           const allUsers = await getAllUsers();
           const userIds = allUsers.map((u) => u.id);
           const recipientEmails = allUsers.map((u) => u.email).filter(Boolean);
@@ -54,7 +53,7 @@ async function createAlbum(req, res) {
               ? emailService.sendNewAlbumNotification(recipientEmails, album)
               : Promise.resolve(),
           ]);
-        } else if (req.user.userRole === ROLES.USER) {
+        } else if (req.user.role === ROLES.USER) {
           await notificationService.createNotification({
             userId: album.uploaderId,
             type: "new_album",
@@ -78,7 +77,7 @@ async function getAlbum(req, res) {
     const album = await albums.getByIdWithSongs(req.params.id);
     if (!album) return res.status(404).json({ error: "Album not found" });
 
-    const isOwner = album.uploaderId === req.user?.userId;
+    const isOwner = album.uploaderId === req.user?.id;
     if (!album.isPublic && !isOwner) {
       return res.status(404).json({ error: "Album not found" });
     }
@@ -105,7 +104,7 @@ async function listPublicAlbums(req, res) {
 
 async function listMyAlbums(req, res) {
   try {
-    const result = await albums.getByUploader(req.user.userId);
+    const result = await albums.getByUploader(req.user.id);
     res.json(result);
   } catch (err) {
     console.error("List user albums error:", err);
@@ -159,8 +158,8 @@ async function addSongToAlbum(req, res) {
     const song = await songs.getById(req.body.songId);
     if (!song) return res.status(404).json({ error: "Song not found" });
 
-    const isSongOwner = song.uploaderId === req.user.userId;
-    const isAdmin = req.user.userRole === ROLES.ADMIN;
+    const isSongOwner = song.uploaderId === req.user.id;
+    const isAdmin = req.user.role === ROLES.ADMIN;
 
     if (!isSongOwner && !isAdmin) {
       return res.status(403).json({ error: "You can only add songs you own to this album" });

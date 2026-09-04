@@ -1,10 +1,11 @@
 import rbac from "../config/roles.js";
 
-const {roleHasPermission} = rbac;
+const { roleHasPermission } = rbac;
 
 function authorize(permission) {
   return (req, res, next) => {
-   const userRole = req.user?.userRole;
+    // FIXED: Use req.user?.role to match what authenticate.js sets
+    const userRole = req.user?.role;
 
     if (!userRole) {
       return res.status(401).json({ error: "Not authenticated" });
