@@ -5,7 +5,7 @@ const { roleHasPermission } = rbac;
 function createAuthorizeResourceAccess({ resourceName, getById, ownerField, permissions }) {
   return function authorizeResourceAccess(action) {
     const ownPermission =
-      action === "update" ? permissions.updateOwn
+      action === "update" || action === "add" ? permissions.updateOwn
       : action === "delete" ? permissions.deleteOwn
       : permissions.publicOwn; // action === "publish"
 
@@ -18,9 +18,10 @@ function createAuthorizeResourceAccess({ resourceName, getById, ownerField, perm
           return res.status(404).json({ error: `${resourceName} not found` });
         }
 
-        const isAdminOverride = roleHasPermission(user.userRole, permissions.manageAny);
-        const isOwner = resource[ownerField] === user.userId;
-        const hasOwnPermission = ownPermission && roleHasPermission(user.userRole, ownPermission);
+        // FIXED: Changed user.userRole -> user.role, and user.userId -> user.id
+        const isAdminOverride = roleHasPermission(user.role, permissions.manageAny);
+        const isOwner = resource[ownerField] === user.id;
+        const hasOwnPermission = ownPermission && roleHasPermission(user.role, ownPermission);
 
         if (isAdminOverride || (hasOwnPermission && isOwner)) {
           req[resourceName] = resource;

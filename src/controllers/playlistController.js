@@ -3,7 +3,7 @@ import cloudinaryStorage from "../utils/cloudinaryStorage.js";
 import playlists from "../db_services/playlists.js";
 import rbac from "../config/roles.js";
 import notificationService from "../db_services/notificationService.js";
-import {getAllUsers} from "../db_services/userService.js";
+import { getAllUsers } from "../db_services/userService.js";
 
 const { ROLES } = rbac;
 
@@ -19,7 +19,9 @@ async function createPlaylist(req, res) {
       });
     }
 
-    const isPublic = req.user.role === ROLES.ADMIN; // FIXED: changed req.user.userRole to req.user.role
+    const isAdmin = req.user.role === ROLES.ADMIN;
+    // Ensure every playlist created by an admin is ALWAYS public
+    const isPublic = isAdmin ? true : (req.body.isPublic === true || req.body.isPublic === "true" || false);
 
     const playlist = await playlists.create({
       name: req.body.name,
@@ -27,7 +29,7 @@ async function createPlaylist(req, res) {
       isPublic,
       imageUrl: imageUpload?.secure_url,
       imagePublicId: imageUpload?.public_id,
-      ownerId: req.user.id, // FIXED: changed from req.user.userId to req.user.id
+      ownerId: req.user.id,
     });
 
     res.status(201).json(playlist);
@@ -35,7 +37,7 @@ async function createPlaylist(req, res) {
     // Run background notifications safely
     queueMicrotask(async () => {
       try {
-        if (req.user.role === ROLES.ADMIN) { // FIXED: changed req.user.userRole to req.user.role
+        if (isAdmin) {
           const allUsers = await getAllUsers();
           const userIds = allUsers.map((u) => u.id);
 
@@ -45,7 +47,7 @@ async function createPlaylist(req, res) {
             message: `Muse just released the latest playlist "${playlist.name}"`,
             playlistId: playlist.id,
           });
-        } else if (req.user.role === ROLES.USER) { // FIXED: changed req.user.userRole to req.user.role
+        } else if (req.user.role === ROLES.USER) {
           await notificationService.createNotification({
             userId: playlist.ownerId,
             type: "new_playlist",
@@ -69,7 +71,7 @@ async function getPlaylist(req, res) {
     const playlist = await playlists.getByIdWithSongs(req.params.id);
     if (!playlist) return res.status(404).json({ error: "Playlist not found" });
 
-    const isOwner = playlist.ownerId === req.user?.id; // FIXED: changed req.user.userId to req.user.id
+    const isOwner = playlist.ownerId === req.user?.id;
     if (!playlist.isPublic && !isOwner) {
       return res.status(404).json({ error: "Playlist not found" });
     }
@@ -96,7 +98,7 @@ async function listPublicPlaylists(req, res) {
 
 async function listMyPlaylists(req, res) {
   try {
-    const result = await playlists.getByOwner(req.user.id); // FIXED: changed req.user.userId to req.user.id
+    const result = await playlists.getByOwner(req.user.id);
     res.json(result);
   } catch (err) {
     console.error("List my playlists error:", err);
@@ -144,7 +146,7 @@ async function addSongToPlaylist(req, res) {
     const song = await songs.getById(req.body.songId);
     if (!song) return res.status(404).json({ error: "Song not found" });
 
-    const isSongOwner = song.uploaderId === req.user.id; // FIXED: changed req.user.userId to req.user.id
+    const isSongOwner = song.uploaderId === req.user.id;
     if (!song.isPublic && !isSongOwner) {
       return res.status(403).json({ error: "Cannot add a private song you don't own" });
     }
