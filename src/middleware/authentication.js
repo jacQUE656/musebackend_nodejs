@@ -2,15 +2,12 @@ import jwt from "jsonwebtoken";
 
 function authenticate(req, res, next) {
 
-  console.log("HEADERS:", req.headers);
-  console.log("COOKIES:", req.cookies);
 
   const authHeader = req.headers.authorization;
   const headerToken = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
   const cookieToken = req.cookies?.accessToken;
   const token = cookieToken || headerToken;
   
-  console.log("RESOLVED TOKEN:", token);
 
 
   if (!token) {
