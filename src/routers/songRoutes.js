@@ -14,6 +14,10 @@ const router = Router();
 
 router.get("/", songController.listPublicSongs);
 router.get("/mine", authenticate, songController.listMySongs);
+
+// Placed before /:id so Express matches the download sub-route correctly
+router.get("/:id/download", optionalAuthenticate, songController.downloadSong);
+
 router.get("/:id", optionalAuthenticate, songController.getSong);
 
 router.post(

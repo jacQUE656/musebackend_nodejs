@@ -170,7 +170,42 @@ async function setSongPublic(req, res) {
     res.status(500).json({ error: "Failed to update song visibility" });
   }
 }
+// OPEN ACCESS: Public songs can be downloaded by anyone; private songs require ownership/admin rights
+async function downloadSong(req, res) {
+  try {
+    const song = await songs.getById(req.params.id);
+    if (!song) return res.status(404).json({ error: "Song not found" });
 
+    if (!song.isPublic) {
+      const isOwner = req.user && song.uploaderId === req.user?.id;
+      const isAdmin = req.user && req.user?.role === ROLES.ADMIN;
+
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({ error: "Access denied. Private song." });
+      }
+    }
+
+    if (!song.audioUrl) {
+      return res.status(404).json({ error: "Audio file path not available" });
+    }
+
+    let downloadUrl = song.audioUrl;
+
+    // Inject Cloudinary flag 'fl_attachment' so the browser downloads it automatically
+    if (downloadUrl.includes("res.cloudinary.com")) {
+      const safeTitle = (song.title || "song").replace(/[^a-zA-Z0-9_-]/g, "_");
+      downloadUrl = downloadUrl.replace("/upload/", `/upload/fl_attachment:${safeTitle}/`);
+    }
+
+    // Return JSON payload so the client can trigger the download safely
+    return res.json({ downloadUrl });
+  } catch (err) {
+    console.error("Download song error:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to download song" });
+    }
+  }
+}
 export default {
   createSong,
   getSong,
@@ -179,4 +214,5 @@ export default {
   updateSong,
   deleteSong,
   setSongPublic,
+  downloadSong,
 };
